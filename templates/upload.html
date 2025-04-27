@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Eye Tracking CSV</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            color: #999;
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+        .drop-zone.dragover {
+            background-color: #e9ecef;
+            border-color: #007bff;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Upload Eye Tracking CSV</h1>
+    <div class="card p-4 shadow-sm">
+        <form id="upload-form" enctype="multipart/form-data">
+            <div id="drop-zone" class="drop-zone mb-3">
+                Drag & Drop your CSV here or Click to Upload
+                <input type="file" name="file" class="form-control d-none" id="file-input" accept=".csv" required>
+            </div>
+            <div class="progress mb-3 d-none" id="progress-container">
+                <p id="progress-text">Uploading...</p>
+            </div>            
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Upload and Generate Plots</button>
+            </div>
+        </form>
+    </div>
+    
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const form = document.getElementById('upload-form');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    
+    // New: Create Preview Table
+    const previewContainer = document.createElement('div');
+    previewContainer.className = 'mt-3';
+    dropZone.parentNode.insertBefore(previewContainer, dropZone.nextSibling);
+    
+    // Drag and drop handlers
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            fileInput.files = files;
+            previewCSV(fileInput.files[0]);
+        }
+    });
+    
+    // Show preview when file selected manually
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            previewCSV(file);
+        }
+    });
+    
+    // Form submit handler
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const file = fileInput.files[0];
+        if (!file) {
+            alert('Please select a CSV file first!');
+            return;
+        }
+    
+        const formData = new FormData();
+        formData.append('file', file);
+    
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/', true);
+    
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                progressContainer.classList.remove('d-none');
+                progressBar.style.width = percentComplete + '%';
+                progressBar.innerText = percentComplete + '%';
+            }
+        });
+    
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                window.location.href = '/download';
+            } else {
+                alert('Upload failed: ' + xhr.responseText);
+            }
+        };
+        xhr.upload.onprogress = function (event) {
+    if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        
+        // Dynamically change the progress text
+        progressContainer.classList.remove('d-none');
+        
+        if (percentComplete < 30) {
+            progressText.textContent = `Starting upload... 🚀 (${percentComplete}%)`;
+        } else if (percentComplete < 60) {
+            progressText.textContent = `Uploading ${percentComplete}%... 📈`;
+        } else if (percentComplete < 90) {
+            progressText.textContent = `Almost there... 🔥 (${percentComplete}%)`;
+        } else if (percentComplete <= 100) {
+            progressText.textContent = `Finalizing... 🛠️ (${percentComplete}%)`;
+        }
+    }
+};
+
+
+        xhr.onerror = function () {
+            alert('Something went wrong!');
+        };
+    
+        xhr.send(formData);
+    });
+    
+    // 📈 Function to Preview CSV
+    function previewCSV(file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const text = event.target.result;
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            const headers = lines[0].split(',');
+    
+            let tableHTML = '<div class="card p-3 shadow-sm"><h5>CSV Preview (first 5 rows)</h5>';
+            tableHTML += '<div class="table-responsive"><table class="table table-sm table-striped">';
+            tableHTML += '<thead><tr>';
+            headers.forEach(header => {
+                tableHTML += `<th>${header.trim()}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+    
+            for (let i = 1; i < Math.min(6, lines.length); i++) {
+                const cells = lines[i].split(',');
+                tableHTML += '<tr>';
+                cells.forEach(cell => {
+                    tableHTML += `<td>${cell.trim()}</td>`;
+                });
+                tableHTML += '</tr>';
+            }
+    
+            tableHTML += '</tbody></table></div></div>';
+    
+            previewContainer.innerHTML = tableHTML;
+        };
+        reader.readAsText(file);
+    }
+    </script>
+    
+
+</body>
+</html>
