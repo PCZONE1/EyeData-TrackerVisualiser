@@ -19,18 +19,39 @@
             border-color: #007bff;
             color: #007bff;
         }
+        .file-input-container {
+            margin-bottom: 20px;
+        }
+        .file-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
     </style>
 </head>
 <body class="bg-light">
 
 <div class="container mt-5">
-    <h1 class="text-center mb-4">Upload Eye Tracking CSV</h1>
+    <h1 class="text-center mb-4">Upload Eye Tracking Data</h1>
     <div class="card p-4 shadow-sm">
-        <form id="upload-form" enctype="multipart/form-data">
-            <div id="drop-zone" class="drop-zone mb-3">
-                Drag & Drop your CSV here or Click to Upload
-                <input type="file" name="file" class="form-control d-none" id="file-input" accept=".csv" required>
+        <form id="upload-form" enctype="multipart/form-data" method="post" action="/">
+            <div class="file-input-container">
+                <label class="file-label">1. CSV File (Required)</label>
+                <div id="csv-drop-zone" class="drop-zone mb-3">
+                    Drag & Drop your CSV here or Click to Upload
+                    <input type="file" name="csv_file" class="form-control d-none" id="csv-file-input" accept=".csv" required>
+                </div>
             </div>
+            
+            <div class="file-input-container">
+                <label class="file-label">2. Background Image (Optional)</label>
+                <div id="image-drop-zone" class="drop-zone mb-3">
+                    Drag & Drop your image here or Click to Upload
+                    <small class="d-block text-muted mt-2">Supported formats: JPG, PNG, JPEG</small>
+                    <input type="file" name="image_file" class="form-control d-none" id="image-file-input" accept="image/jpeg,image/png,image/jpg">
+                </div>
+            </div>
+            
             <div class="progress mb-3 d-none" id="progress-container">
                 <p id="progress-text">Uploading...</p>
             </div>            
@@ -43,41 +64,77 @@
 </div>
 
 <script>
-    const dropZone = document.getElementById('drop-zone');
-    const fileInput = document.getElementById('file-input');
+    // CSV drop zone
+    const csvDropZone = document.getElementById('csv-drop-zone');
+    const csvFileInput = document.getElementById('csv-file-input');
+    
+    // Image drop zone
+    const imageDropZone = document.getElementById('image-drop-zone');
+    const imageFileInput = document.getElementById('image-file-input');
+    
     const form = document.getElementById('upload-form');
     const progressContainer = document.getElementById('progress-container');
-    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
     
-    // New: Create Preview Table
-    const previewContainer = document.createElement('div');
-    previewContainer.className = 'mt-3';
-    dropZone.parentNode.insertBefore(previewContainer, dropZone.nextSibling);
+    // New: Create Preview containers
+    const csvPreviewContainer = document.createElement('div');
+    csvPreviewContainer.className = 'mt-3';
+    csvDropZone.parentNode.insertBefore(csvPreviewContainer, csvDropZone.nextSibling);
     
-    // Drag and drop handlers
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => {
+    const imagePreviewContainer = document.createElement('div');
+    imagePreviewContainer.className = 'mt-3';
+    imageDropZone.parentNode.insertBefore(imagePreviewContainer, imageDropZone.nextSibling);
+    
+    // CSV drag and drop handlers
+    csvDropZone.addEventListener('click', () => csvFileInput.click());
+    csvDropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropZone.classList.add('dragover');
+        csvDropZone.classList.add('dragover');
     });
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
+    csvDropZone.addEventListener('dragleave', () => {
+        csvDropZone.classList.remove('dragover');
     });
-    dropZone.addEventListener('drop', (e) => {
+    csvDropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.classList.remove('dragover');
+        csvDropZone.classList.remove('dragover');
         const files = e.dataTransfer.files;
         if (files.length) {
-            fileInput.files = files;
-            previewCSV(fileInput.files[0]);
+            csvFileInput.files = files;
+            previewCSV(csvFileInput.files[0]);
         }
     });
     
-    // Show preview when file selected manually
-    fileInput.addEventListener('change', (e) => {
+    // Image drag and drop handlers
+    imageDropZone.addEventListener('click', () => imageFileInput.click());
+    imageDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        imageDropZone.classList.add('dragover');
+    });
+    imageDropZone.addEventListener('dragleave', () => {
+        imageDropZone.classList.remove('dragover');
+    });
+    imageDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        imageDropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            imageFileInput.files = files;
+            previewImage(imageFileInput.files[0]);
+        }
+    });
+    
+    // Show previews when files selected manually
+    csvFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
             previewCSV(file);
+        }
+    });
+    
+    imageFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            previewImage(file);
         }
     });
     
@@ -85,14 +142,20 @@
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         
-        const file = fileInput.files[0];
-        if (!file) {
+        const csvFile = csvFileInput.files[0];
+        if (!csvFile) {
             alert('Please select a CSV file first!');
             return;
         }
     
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', csvFile);
+        
+        // Add image file if present
+        const imageFile = imageFileInput.files[0];
+        if (imageFile) {
+            formData.append('image_file', imageFile);
+        }
     
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/', true);
@@ -101,8 +164,15 @@
             if (e.lengthComputable) {
                 const percentComplete = Math.round((e.loaded / e.total) * 100);
                 progressContainer.classList.remove('d-none');
-                progressBar.style.width = percentComplete + '%';
-                progressBar.innerText = percentComplete + '%';
+                if (percentComplete < 30) {
+                    progressText.textContent = `Starting upload... 🚀 (${percentComplete}%)`;
+                } else if (percentComplete < 60) {
+                    progressText.textContent = `Uploading ${percentComplete}%... 📈`;
+                } else if (percentComplete < 90) {
+                    progressText.textContent = `Almost there... 🔥 (${percentComplete}%)`;
+                } else if (percentComplete <= 100) {
+                    progressText.textContent = `Finalizing... 🛠️ (${percentComplete}%)`;
+                }
             }
         });
     
@@ -113,26 +183,7 @@
                 alert('Upload failed: ' + xhr.responseText);
             }
         };
-        xhr.upload.onprogress = function (event) {
-    if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        
-        // Dynamically change the progress text
-        progressContainer.classList.remove('d-none');
-        
-        if (percentComplete < 30) {
-            progressText.textContent = `Starting upload... 🚀 (${percentComplete}%)`;
-        } else if (percentComplete < 60) {
-            progressText.textContent = `Uploading ${percentComplete}%... 📈`;
-        } else if (percentComplete < 90) {
-            progressText.textContent = `Almost there... 🔥 (${percentComplete}%)`;
-        } else if (percentComplete <= 100) {
-            progressText.textContent = `Finalizing... 🛠️ (${percentComplete}%)`;
-        }
-    }
-};
-
-
+    
         xhr.onerror = function () {
             alert('Something went wrong!');
         };
@@ -167,12 +218,24 @@
     
             tableHTML += '</tbody></table></div></div>';
     
-            previewContainer.innerHTML = tableHTML;
+            csvPreviewContainer.innerHTML = tableHTML;
         };
         reader.readAsText(file);
     }
-    </script>
     
+    // 🖼️ Function to Preview Image
+    function previewImage(file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            let imageHTML = '<div class="card p-3 shadow-sm"><h5>Image Preview</h5>';
+            imageHTML += `<div class="text-center"><img src="${event.target.result}" class="img-fluid" style="max-height: 200px;" alt="Background Image Preview"></div>`;
+            imageHTML += '</div>';
+            
+            imagePreviewContainer.innerHTML = imageHTML;
+        };
+        reader.readAsDataURL(file);
+    }
+</script>
 
 </body>
 </html>

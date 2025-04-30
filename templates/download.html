@@ -1,28 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Generated Plots</title>
+    <title>Eye Tracking Visualization Results</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .plot-container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .plot-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+        .download-section {
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
 </head>
 <body class="bg-light">
 <div class="container mt-5">
-    <h1 class="text-center mb-4">Your Plots are Ready!</h1>
+    <h1 class="text-center mb-4">Eye Tracking Visualization Results</h1>
+    
     <div class="row justify-content-center">
-        <div class="col-md-6 text-center mb-4">
-            <h5>Fixation Map Preview</h5>
-            <img src="/static/fixation_map.png" class="img-fluid border rounded" alt="Fixation Map">
-            <br><br>
-            <a href="/static/fixation_map.png" download class="btn btn-success mt-2">Download Fixation Map</a>
+        <div class="col-md-6 mb-4">
+            <div class="plot-container">
+                <h4 class="text-center mb-3">Fixation Map</h4>
+                <div class="text-center">
+                    <img src="{{ fixation_map }}" class="plot-image" alt="Fixation Map">
+                </div>
+                <div class="download-section">
+                    <span class="text-muted">Shows where and how long the eyes focused</span>
+                    <a href="{{ fixation_map }}" download class="btn btn-success">Download</a>
+                </div>
+            </div>
         </div>
-        <div class="col-md-6 text-center mb-4">
-            <h5>Pupil Size Heatmap Preview</h5>
-            <img src="/static/pupil_size_heatmap.png" class="img-fluid border rounded" alt="Pupil Size Heatmap">
-            <br><br>
-            <a href="/static/pupil_size_heatmap.png" download class="btn btn-success mt-2">Download Pupil Size Heatmap</a>
+        
+        <div class="col-md-6 mb-4">
+            <div class="plot-container">
+                <h4 class="text-center mb-3">Pupil Size Heatmap</h4>
+                <div class="text-center">
+                    <img src="{{ pupil_heatmap }}" class="plot-image" alt="Pupil Size Heatmap">
+                </div>
+                <div class="download-section">
+                    <span class="text-muted">Shows cognitive load based on pupil dilation</span>
+                    <a href="{{ pupil_heatmap }}" download class="btn btn-success">Download</a>
+                </div>
+            </div>
         </div>
     </div>
-    <div class="text-center">
-        <a href="/" class="btn btn-secondary mt-4">Upload Another File</a>
+    
+    <div class="text-center mt-3 mb-5">
+        <a href="/" class="btn btn-primary">Upload Another Dataset</a>
     </div>
 </div>
 </body>
