@@ -59,7 +59,7 @@ Here's what the visualizations look like:
 
 2. Open your web browser and navigate to:
    ```
-   http://127.0.0.1:5000
+   http://127.0.0.1:10000
    ```
 
 3. Upload your eye tracking CSV data and an optional background image
