@@ -1,1 +1,6 @@
-/static/
+# Application specific
+uploads/
+static/
+static/*_fixation_map.png
+static/*_pupil_size_heatmap.png
+static/latest_plots.txt
