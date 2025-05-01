@@ -22,39 +22,69 @@
             display: flex;
             justify-content: space-between;
         }
+        .session-title {
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .session-container {
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px dashed #ddd;
+        }
+        .session-container:last-child {
+            border-bottom: none;
+        }
+        .session-info {
+            margin-bottom: 15px;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body class="bg-light">
 <div class="container mt-5">
     <h1 class="text-center mb-4">Eye Tracking Visualization Results</h1>
     
-    <div class="row justify-content-center">
-        <div class="col-md-6 mb-4">
-            <div class="plot-container">
-                <h4 class="text-center mb-3">Fixation Map</h4>
-                <div class="text-center">
-                    <img src="{{ fixation_map }}" class="plot-image" alt="Fixation Map">
-                </div>
-                <div class="download-section">
-                    <span class="text-muted">Shows where and how long the eyes focused</span>
-                    <a href="{{ fixation_map }}" download class="btn btn-success">Download</a>
-                </div>
+    {% for session in sessions %}
+    <div class="session-container">
+        <div class="session-title">
+            <h3>Session {{ session.id }}</h3>
+            <div class="session-info">
+                <p>Data points: {{ session.data_count }} ({{ session.percentage }}% of total)</p>
             </div>
         </div>
         
-        <div class="col-md-6 mb-4">
-            <div class="plot-container">
-                <h4 class="text-center mb-3">Pupil Size Heatmap</h4>
-                <div class="text-center">
-                    <img src="{{ pupil_heatmap }}" class="plot-image" alt="Pupil Size Heatmap">
+        <div class="row justify-content-center">
+            <div class="col-md-6 mb-4">
+                <div class="plot-container">
+                    <h4 class="text-center mb-3">Fixation Map</h4>
+                    <div class="text-center">
+                        <img src="{{ session.fixation_map }}" class="plot-image" alt="Fixation Map - Session {{ session.id }}">
+                    </div>
+                    <div class="download-section">
+                        <span class="text-muted">Shows where and how long the eyes focused</span>
+                        <a href="{{ session.fixation_map }}" download class="btn btn-success">Download</a>
+                    </div>
                 </div>
-                <div class="download-section">
-                    <span class="text-muted">Shows cognitive load based on pupil dilation</span>
-                    <a href="{{ pupil_heatmap }}" download class="btn btn-success">Download</a>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="plot-container">
+                    <h4 class="text-center mb-3">Pupil Size Heatmap</h4>
+                    <div class="text-center">
+                        <img src="{{ session.pupil_heatmap }}" class="plot-image" alt="Pupil Size Heatmap - Session {{ session.id }}">
+                    </div>
+                    <div class="download-section">
+                        <span class="text-muted">Shows cognitive load based on pupil dilation</span>
+                        <a href="{{ session.pupil_heatmap }}" download class="btn btn-success">Download</a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endfor %}
     
     <div class="text-center mt-3 mb-5">
         <a href="/" class="btn btn-primary">Upload Another Dataset</a>

@@ -27,6 +27,37 @@
             margin-bottom: 5px;
             display: block;
         }
+        .session-container {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f8f9fa;
+        }
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .remove-session {
+            color: #dc3545;
+            cursor: pointer;
+        }
+        #add-session-btn {
+            margin-bottom: 20px;
+        }
+        .percentage-slider {
+            width: 100%;
+        }
+        .percentage-value {
+            font-weight: bold;
+        }
+        .sessions-container {
+            max-height: 600px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -39,51 +70,69 @@
                 <label class="file-label">1. CSV File (Required)</label>
                 <div id="csv-drop-zone" class="drop-zone mb-3">
                     Drag & Drop your CSV here or Click to Upload
-                    <input type="file" name="csv_file" class="form-control d-none" id="csv-file-input" accept=".csv" required>
+                    <input type="file" name="file" class="form-control d-none" id="csv-file-input" accept=".csv" required>
                 </div>
             </div>
             
-            <div class="file-input-container">
-                <label class="file-label">2. Background Image (Optional)</label>
-                <div id="image-drop-zone" class="drop-zone mb-3">
-                    Drag & Drop your image here or Click to Upload
-                    <small class="d-block text-muted mt-2">Supported formats: JPG, PNG, JPEG</small>
-                    <input type="file" name="image_file" class="form-control d-none" id="image-file-input" accept="image/jpeg,image/png,image/jpg">
+            <div id="csv-preview-container" class="mt-3"></div>
+            
+            <div class="mt-4 mb-3">
+                <h4>2. Divide Into Sessions</h4>
+                <p class="text-muted">Split your data into multiple sessions and upload a background image for each session.</p>
+                
+                <div id="sessions-container" class="sessions-container">
+                    <!-- Default first session -->
+                    <div class="session-container" data-session-id="1">
+                        <div class="session-header">
+                            <h5>Session 1</h5>
+                            <span class="remove-session d-none"><i class="bi bi-trash"></i> Remove</span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Percentage of data points: <span class="percentage-value">100</span>%</label>
+                            <input type="range" class="form-range percentage-slider" min="1" max="100" value="100" data-session-id="1">
+                            <input type="hidden" name="session_percentage_1" value="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Background Image (Optional)</label>
+                            <div class="image-drop-zone drop-zone mb-2">
+                                Drag & Drop image here or Click to Upload
+                                <small class="d-block text-muted mt-2">Supported formats: JPG, PNG, JPEG</small>
+                                <input type="file" name="image_file_1" class="form-control d-none image-file-input" accept="image/jpeg,image/png,image/jpg">
+                            </div>
+                            <div class="image-preview-container"></div>
+                        </div>
+                    </div>
                 </div>
+                
+                <button type="button" id="add-session-btn" class="btn btn-secondary">
+                    <i class="bi bi-plus-circle"></i> Add Another Session
+                </button>
             </div>
             
             <div class="progress mb-3 d-none" id="progress-container">
                 <p id="progress-text">Uploading...</p>
             </div>            
             <div class="d-grid">
-                <button type="submit" class="btn btn-primary">Upload and Generate Plots</button>
+                <button type="submit" class="btn btn-primary">Process All Sessions</button>
             </div>
         </form>
     </div>
-    
 </div>
 
 <script>
     // CSV drop zone
     const csvDropZone = document.getElementById('csv-drop-zone');
     const csvFileInput = document.getElementById('csv-file-input');
-    
-    // Image drop zone
-    const imageDropZone = document.getElementById('image-drop-zone');
-    const imageFileInput = document.getElementById('image-file-input');
+    const csvPreviewContainer = document.getElementById('csv-preview-container');
     
     const form = document.getElementById('upload-form');
     const progressContainer = document.getElementById('progress-container');
     const progressText = document.getElementById('progress-text');
+    const addSessionBtn = document.getElementById('add-session-btn');
+    const sessionsContainer = document.getElementById('sessions-container');
     
-    // New: Create Preview containers
-    const csvPreviewContainer = document.createElement('div');
-    csvPreviewContainer.className = 'mt-3';
-    csvDropZone.parentNode.insertBefore(csvPreviewContainer, csvDropZone.nextSibling);
-    
-    const imagePreviewContainer = document.createElement('div');
-    imagePreviewContainer.className = 'mt-3';
-    imageDropZone.parentNode.insertBefore(imagePreviewContainer, imageDropZone.nextSibling);
+    let sessionCount = 1;
+    let csvRowCount = 0;
     
     // CSV drag and drop handlers
     csvDropZone.addEventListener('click', () => csvFileInput.click());
@@ -104,26 +153,7 @@
         }
     });
     
-    // Image drag and drop handlers
-    imageDropZone.addEventListener('click', () => imageFileInput.click());
-    imageDropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        imageDropZone.classList.add('dragover');
-    });
-    imageDropZone.addEventListener('dragleave', () => {
-        imageDropZone.classList.remove('dragover');
-    });
-    imageDropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        imageDropZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length) {
-            imageFileInput.files = files;
-            previewImage(imageFileInput.files[0]);
-        }
-    });
-    
-    // Show previews when files selected manually
+    // Show previews when CSV file selected manually
     csvFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -131,65 +161,181 @@
         }
     });
     
-    imageFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            previewImage(file);
-        }
+    // Add Session button handler
+    addSessionBtn.addEventListener('click', () => {
+        sessionCount++;
+        addSession(sessionCount);
+        recalculatePercentages();
     });
     
-    // Form submit handler
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
+    // Initial setup for image dropzones
+    setupImageDropZones();
+    
+    // Function to add a new session
+    function addSession(id) {
+        const sessionTemplate = `
+            <div class="session-container" data-session-id="${id}">
+                <div class="session-header">
+                    <h5>Session ${id}</h5>
+                    <span class="remove-session"><i class="bi bi-trash"></i> Remove</span>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Percentage of data points: <span class="percentage-value">0</span>%</label>
+                    <input type="range" class="form-range percentage-slider" min="1" max="100" value="0" data-session-id="${id}">
+                    <input type="hidden" name="session_percentage_${id}" value="0">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Background Image (Optional)</label>
+                    <div class="image-drop-zone drop-zone mb-2">
+                        Drag & Drop image here or Click to Upload
+                        <small class="d-block text-muted mt-2">Supported formats: JPG, PNG, JPEG</small>
+                        <input type="file" name="image_file_${id}" class="form-control d-none image-file-input" accept="image/jpeg,image/png,image/jpg">
+                    </div>
+                    <div class="image-preview-container"></div>
+                </div>
+            </div>
+        `;
         
-        const csvFile = csvFileInput.files[0];
-        if (!csvFile) {
-            alert('Please select a CSV file first!');
-            return;
-        }
+        sessionsContainer.insertAdjacentHTML('beforeend', sessionTemplate);
+        setupImageDropZones();
+        setupRemoveSessionButtons();
+        setupPercentageSliders();
+    }
     
-        const formData = new FormData();
-        formData.append('file', csvFile);
-        
-        // Add image file if present
-        const imageFile = imageFileInput.files[0];
-        if (imageFile) {
-            formData.append('image_file', imageFile);
-        }
-    
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/', true);
-    
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = Math.round((e.loaded / e.total) * 100);
-                progressContainer.classList.remove('d-none');
-                if (percentComplete < 30) {
-                    progressText.textContent = `Starting upload... 🚀 (${percentComplete}%)`;
-                } else if (percentComplete < 60) {
-                    progressText.textContent = `Uploading ${percentComplete}%... 📈`;
-                } else if (percentComplete < 90) {
-                    progressText.textContent = `Almost there... 🔥 (${percentComplete}%)`;
-                } else if (percentComplete <= 100) {
-                    progressText.textContent = `Finalizing... 🛠️ (${percentComplete}%)`;
+    // Setup for image drop zones
+    function setupImageDropZones() {
+        document.querySelectorAll('.image-drop-zone').forEach(dropZone => {
+            if (dropZone.getAttribute('data-initialized')) return;
+            
+            const fileInput = dropZone.querySelector('.image-file-input');
+            const previewContainer = dropZone.nextElementSibling;
+            
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    fileInput.files = files;
+                    previewImage(fileInput.files[0], previewContainer);
                 }
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    previewImage(file, previewContainer);
+                }
+            });
+            
+            dropZone.setAttribute('data-initialized', 'true');
+        });
+    }
+    
+    // Setup for remove session buttons
+    function setupRemoveSessionButtons() {
+        document.querySelectorAll('.remove-session').forEach(button => {
+            if (button.getAttribute('data-initialized')) return;
+            
+            button.addEventListener('click', () => {
+                const session = button.closest('.session-container');
+                session.remove();
+                recalculatePercentages();
+                updateSessionNumbers();
+            });
+            
+            button.setAttribute('data-initialized', 'true');
+        });
+    }
+    
+    // Update session numbers after removing a session
+    function updateSessionNumbers() {
+        document.querySelectorAll('.session-container').forEach((session, index) => {
+            const sessionId = index + 1;
+            session.setAttribute('data-session-id', sessionId);
+            session.querySelector('h5').textContent = `Session ${sessionId}`;
+            
+            // Update percentage slider and hidden input names
+            const slider = session.querySelector('.percentage-slider');
+            slider.setAttribute('data-session-id', sessionId);
+            
+            const hiddenInput = session.querySelector('input[type="hidden"]');
+            hiddenInput.name = `session_percentage_${sessionId}`;
+            
+            // Update image input name
+            const imageInput = session.querySelector('.image-file-input');
+            imageInput.name = `image_file_${sessionId}`;
+            
+            // Hide remove button for first session
+            const removeButton = session.querySelector('.remove-session');
+            if (index === 0) {
+                removeButton.classList.add('d-none');
+            } else {
+                removeButton.classList.remove('d-none');
             }
         });
+        
+        // Update session count
+        sessionCount = document.querySelectorAll('.session-container').length;
+    }
     
-        xhr.onload = function () {
-            if (xhr.status === 200) {
-                window.location.href = '/download';
-            } else {
-                alert('Upload failed: ' + xhr.responseText);
+    // Setup for percentage sliders
+    function setupPercentageSliders() {
+        document.querySelectorAll('.percentage-slider').forEach(slider => {
+            if (slider.getAttribute('data-initialized')) return;
+            
+            slider.addEventListener('input', () => {
+                const value = slider.value;
+                const sessionId = slider.getAttribute('data-session-id');
+                const valueDisplay = slider.previousElementSibling.querySelector('.percentage-value');
+                valueDisplay.textContent = value;
+                
+                // Update hidden input
+                const hiddenInput = slider.nextElementSibling;
+                hiddenInput.value = value;
+                
+                recalculatePercentages();
+            });
+            
+            slider.setAttribute('data-initialized', 'true');
+        });
+    }
+    
+    // Recalculate percentages to ensure they sum to 100%
+    function recalculatePercentages() {
+        const sliders = document.querySelectorAll('.percentage-slider');
+        const hiddenInputs = document.querySelectorAll('input[type="hidden"][name^="session_percentage_"]');
+        
+        // Calculate total percentage
+        let total = 0;
+        sliders.forEach(slider => {
+            total += parseInt(slider.value);
+        });
+        
+        // If total is not 100%, adjust the first slider
+        if (total !== 100 && sliders.length > 0) {
+            const firstSlider = sliders[0];
+            const firstValue = parseInt(firstSlider.value);
+            const adjustment = 100 - (total - firstValue);
+            
+            if (adjustment > 0) {
+                firstSlider.value = adjustment;
+                const valueDisplay = firstSlider.previousElementSibling.querySelector('.percentage-value');
+                valueDisplay.textContent = adjustment;
+                
+                // Update hidden input
+                const hiddenInput = firstSlider.nextElementSibling;
+                hiddenInput.value = adjustment;
             }
-        };
-    
-        xhr.onerror = function () {
-            alert('Something went wrong!');
-        };
-    
-        xhr.send(formData);
-    });
+        }
+    }
     
     // 📈 Function to Preview CSV
     function previewCSV(file) {
@@ -197,9 +343,12 @@
         reader.onload = function(event) {
             const text = event.target.result;
             const lines = text.split('\n').filter(line => line.trim() !== '');
+            csvRowCount = lines.length - 1; // Subtract header row
+            
             const headers = lines[0].split(',');
     
             let tableHTML = '<div class="card p-3 shadow-sm"><h5>CSV Preview (first 5 rows)</h5>';
+            tableHTML += `<p class="text-muted">Total data points: ${csvRowCount}</p>`;
             tableHTML += '<div class="table-responsive"><table class="table table-sm table-striped">';
             tableHTML += '<thead><tr>';
             headers.forEach(header => {
@@ -219,22 +368,86 @@
             tableHTML += '</tbody></table></div></div>';
     
             csvPreviewContainer.innerHTML = tableHTML;
+            
+            // Add hidden input for total rows
+            const rowCountInput = document.createElement('input');
+            rowCountInput.type = 'hidden';
+            rowCountInput.name = 'total_rows';
+            rowCountInput.value = csvRowCount;
+            form.appendChild(rowCountInput);
         };
         reader.readAsText(file);
     }
     
     // 🖼️ Function to Preview Image
-    function previewImage(file) {
+    function previewImage(file, container) {
         const reader = new FileReader();
         reader.onload = function(event) {
-            let imageHTML = '<div class="card p-3 shadow-sm"><h5>Image Preview</h5>';
-            imageHTML += `<div class="text-center"><img src="${event.target.result}" class="img-fluid" style="max-height: 200px;" alt="Background Image Preview"></div>`;
+            let imageHTML = '<div class="card p-3 shadow-sm mt-2"><h6>Image Preview</h6>';
+            imageHTML += `<div class="text-center"><img src="${event.target.result}" class="img-fluid" style="max-height: 150px;" alt="Background Image Preview"></div>`;
             imageHTML += '</div>';
             
-            imagePreviewContainer.innerHTML = imageHTML;
+            container.innerHTML = imageHTML;
         };
         reader.readAsDataURL(file);
     }
+    
+    // Form submit handler
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const csvFile = csvFileInput.files[0];
+        if (!csvFile) {
+            alert('Please select a CSV file first!');
+            return;
+        }
+        
+        // Validate total percentage equals 100%
+        let totalPercentage = 0;
+        document.querySelectorAll('input[type="hidden"][name^="session_percentage_"]').forEach(input => {
+            totalPercentage += parseInt(input.value);
+        });
+        
+        if (totalPercentage !== 100) {
+            alert('The sum of all session percentages must equal 100%');
+            return;
+        }
+    
+        const formData = new FormData(form);
+    
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/', true);
+    
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                progressContainer.classList.remove('d-none');
+                if (percentComplete < 30) {
+                    progressText.textContent = `Starting upload... 🚀 (${percentComplete}%)`;
+                } else if (percentComplete < 60) {
+                    progressText.textContent = `Uploading ${percentComplete}%... 📈`;
+                } else if (percentComplete < 90) {
+                    progressText.textContent = `Almost there... 🔥 (${percentComplete}%)`;
+                } else if (percentComplete <= 100) {
+                    progressText.textContent = `Processing sessions... 🛠️ (${percentComplete}%)`;
+                }
+            }
+        });
+    
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                window.location.href = '/download';
+            } else {
+                alert('Upload failed: ' + xhr.responseText);
+            }
+        };
+    
+        xhr.onerror = function () {
+            alert('Something went wrong!');
+        };
+    
+        xhr.send(formData);
+    });
 </script>
 
 </body>

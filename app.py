@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from PIL import Image
 from sklearn.cluster import DBSCAN
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import os
 import time
 import uuid
+import json
+import math
 
 
 def clean_old_files(folder, age_seconds=3600):
@@ -25,9 +27,11 @@ def clean_old_files(folder, age_seconds=3600):
                 os.remove(filepath)
 
 
-def create_fixation_map(csv_file, background_image=None, distance_threshold=50):
-    # Read the CSV file
-    df = pd.read_csv(csv_file)
+def create_fixation_map(dataframe, background_image=None, distance_threshold=50):
+    """
+    Create a fixation map from the provided dataframe.
+    """
+    df = dataframe.copy()
     
     # Convert Fixation Column (TRUE/FALSE → 1/0)
     df["fixation"] = df["fixation"].astype(bool).astype(int)
@@ -47,15 +51,21 @@ def create_fixation_map(csv_file, background_image=None, distance_threshold=50):
     
     # Perform spatial clustering using DBSCAN
     coordinates = np.column_stack((fixation_data['rotated_x'], fixation_data['rotated_y']))
-    clustering = DBSCAN(eps=distance_threshold, min_samples=1).fit(coordinates)
-    fixation_data['cluster'] = clustering.labels_
     
-    # Aggregate data by cluster
-    clustered_data = fixation_data.groupby('cluster').agg({
-        'rotated_x': 'mean',
-        'rotated_y': 'mean',
-        'time': 'count'  # Count number of points in each cluster
-    }).reset_index()
+    # Check if we have enough data points for clustering
+    if len(coordinates) > 0:
+        clustering = DBSCAN(eps=distance_threshold, min_samples=1).fit(coordinates)
+        fixation_data['cluster'] = clustering.labels_
+        
+        # Aggregate data by cluster
+        clustered_data = fixation_data.groupby('cluster').agg({
+            'rotated_x': 'mean',
+            'rotated_y': 'mean',
+            'time': 'count'  # Count number of points in each cluster
+        }).reset_index()
+    else:
+        # Create empty clustered data if no fixation points
+        clustered_data = pd.DataFrame(columns=['cluster', 'rotated_x', 'rotated_y', 'time'])
     
     # Create figure and axis with white background
     # Convert inches to pixels (assuming 100 DPI)
@@ -79,37 +89,43 @@ def create_fixation_map(csv_file, background_image=None, distance_threshold=50):
         except Exception as e:
             print(f"Error loading background image: {str(e)}")
     
-    # Plot lines between consecutive clusters
-    for i in range(len(clustered_data) - 1):
-        ax.plot([clustered_data['rotated_x'].iloc[i], clustered_data['rotated_x'].iloc[i + 1]], 
-               [clustered_data['rotated_y'].iloc[i], clustered_data['rotated_y'].iloc[i + 1]], 
-               color='blue', alpha=0.5, linewidth=1.5)
-    
-    # Calculate sizes based on number of points in each cluster
-    max_points = clustered_data['time'].max()
-    min_points = clustered_data['time'].min()
-    
-    # Adjust the size range to make differences more visible
-    min_size = 100
-    max_size = 2000
-    
-    # Scale sizes with a logarithmic transformation to better show differences
-    sizes = min_size + ((np.log1p(clustered_data['time']) - np.log1p(min_points)) / 
-                       (np.log1p(max_points) - np.log1p(min_points))) * (max_size - min_size)
-    
-    # Plot circles for fixation points
-    scatter = ax.scatter(clustered_data['rotated_x'], 
-                        clustered_data['rotated_y'], 
-                        s=sizes,  # Using our new sizes
-                        alpha=0.6, 
-                        c=range(len(clustered_data)),  # Color based on sequence
-                        cmap='viridis',
-                        edgecolors='white',  # Add white edge for better visibility on background
-                        linewidths=1)
-    
-    # Add a small colorbar to show temporal sequence
-    cbar = plt.colorbar(scatter, label='Fixation Sequence', shrink=0.6)
-    cbar.ax.tick_params(labelsize=8)
+    # Only plot lines and clusters if we have data
+    if len(clustered_data) > 1:
+        # Plot lines between consecutive clusters
+        for i in range(len(clustered_data) - 1):
+            ax.plot([clustered_data['rotated_x'].iloc[i], clustered_data['rotated_x'].iloc[i + 1]], 
+                   [clustered_data['rotated_y'].iloc[i], clustered_data['rotated_y'].iloc[i + 1]], 
+                   color='blue', alpha=0.5, linewidth=1.5)
+        
+        # Calculate sizes based on number of points in each cluster
+        max_points = clustered_data['time'].max()
+        min_points = clustered_data['time'].min()
+        
+        # Adjust the size range to make differences more visible
+        min_size = 100
+        max_size = 2000
+        
+        # Scale sizes with a logarithmic transformation to better show differences
+        sizes = min_size + ((np.log1p(clustered_data['time']) - np.log1p(min_points)) / 
+                           (np.log1p(max_points) - np.log1p(min_points))) * (max_size - min_size)
+        
+        # Plot circles for fixation points
+        scatter = ax.scatter(clustered_data['rotated_x'], 
+                            clustered_data['rotated_y'], 
+                            s=sizes,  # Using our new sizes
+                            alpha=0.6, 
+                            c=range(len(clustered_data)),  # Color based on sequence
+                            cmap='viridis',
+                            edgecolors='white',  # Add white edge for better visibility on background
+                            linewidths=1)
+        
+        # Add a small colorbar to show temporal sequence
+        cbar = plt.colorbar(scatter, label='Fixation Sequence', shrink=0.6)
+        cbar.ax.tick_params(labelsize=8)
+    else:
+        # Add a text message if there are no fixation points
+        ax.text(960, 540, 'No fixation points in this session', 
+                fontsize=20, ha='center', va='center', color='gray')
     
     # Remove axes, title, and labels
     ax.set_axis_off()
@@ -129,9 +145,11 @@ def create_fixation_map(csv_file, background_image=None, distance_threshold=50):
     return output_path
 
 
-def create_pupil_heatmap(csv_file, background_image=None):
-    # Read the CSV file
-    df = pd.read_csv(csv_file)
+def create_pupil_heatmap(dataframe, background_image=None):
+    """
+    Create a pupil size heatmap from the provided dataframe.
+    """
+    df = dataframe.copy()
     
     # Convert Fixation Column (TRUE/FALSE → 1/0)
     df["fixation"] = df["fixation"].astype(bool).astype(int)
@@ -174,21 +192,27 @@ def create_pupil_heatmap(csv_file, background_image=None):
         except Exception as e:
             print(f"Error loading background image: {str(e)}")
     
-    # Create a scatter plot colored by pupil size
-    scatter = ax.scatter(fixation_data['rotated_x'], 
-                        fixation_data['rotated_y'], 
-                        s=150,  # Increased size for better visibility
-                        alpha=0.7, 
-                        c=fixation_data['avg_pupil_size'],  # Color based on average pupil size
-                        cmap='YlOrRd',  # Yellow-Orange-Red colormap
-                        edgecolors='white',  # Add white edge for better visibility
-                        linewidths=0.5,
-                        norm=plt.Normalize(vmin=fixation_data['avg_pupil_size'].min(), 
-                                        vmax=fixation_data['avg_pupil_size'].max()))
-    
-    # Add colorbar to show pupil size scale
-    cbar = plt.colorbar(scatter, label='Average Pupil Size')
-    cbar.ax.tick_params(labelsize=8)
+    # Only create scatter plot if we have data
+    if len(fixation_data) > 0:
+        # Create a scatter plot colored by pupil size
+        scatter = ax.scatter(fixation_data['rotated_x'], 
+                            fixation_data['rotated_y'], 
+                            s=150,  # Increased size for better visibility
+                            alpha=0.7, 
+                            c=fixation_data['avg_pupil_size'],  # Color based on average pupil size
+                            cmap='YlOrRd',  # Yellow-Orange-Red colormap
+                            edgecolors='white',  # Add white edge for better visibility
+                            linewidths=0.5,
+                            norm=plt.Normalize(vmin=fixation_data['avg_pupil_size'].min(), 
+                                            vmax=fixation_data['avg_pupil_size'].max()))
+        
+        # Add colorbar to show pupil size scale
+        cbar = plt.colorbar(scatter, label='Average Pupil Size')
+        cbar.ax.tick_params(labelsize=8)
+    else:
+        # Add a text message if there are no fixation points
+        ax.text(960, 540, 'No pupil data in this session', 
+                fontsize=20, ha='center', va='center', color='gray')
     
     # Remove axes
     ax.set_axis_off()
@@ -206,6 +230,36 @@ def create_pupil_heatmap(csv_file, background_image=None):
     plt.close()
     
     return output_path
+
+
+def split_dataframe_by_percentages(df, percentages):
+    """
+    Split a dataframe into multiple parts based on percentage values.
+    
+    Args:
+        df: Pandas DataFrame to split
+        percentages: List of percentage values (should sum to 100)
+    
+    Returns:
+        List of DataFrames
+    """
+    total_rows = len(df)
+    result = []
+    start_idx = 0
+    
+    for percentage in percentages:
+        num_rows = math.ceil((percentage / 100) * total_rows)
+        end_idx = min(start_idx + num_rows, total_rows)
+        
+        # Handle edge case for last session
+        if percentage == percentages[-1]:
+            end_idx = total_rows
+            
+        session_df = df.iloc[start_idx:end_idx].copy()
+        result.append(session_df)
+        start_idx = end_idx
+        
+    return result
 
 
 app = Flask(__name__)
@@ -237,61 +291,114 @@ def upload_file():
     csv_filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"{uuid.uuid4()}_{csv_file.filename}")
     csv_file.save(csv_filepath)
     
-    # Check if image file is present
-    background_image_path = None
-    if 'image_file' in request.files:
-        image_file = request.files['image_file']
-        if image_file.filename != '':
-            # Check file extension
-            allowed_extensions = {'.jpg', '.jpeg', '.png'}
-            file_ext = os.path.splitext(image_file.filename.lower())[1]
-            
-            if file_ext in allowed_extensions:
-                # Save image file
-                image_filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"{uuid.uuid4()}_{image_file.filename}")
-                image_file.save(image_filepath)
-                background_image_path = image_filepath
-    
     try:
-        # Generate plots
-        fixation_map_path = create_fixation_map(csv_filepath, background_image_path, distance_threshold=25)
-        pupil_heatmap_path = create_pupil_heatmap(csv_filepath, background_image_path)
+        # Get session information
+        session_count = 0
+        session_percentages = []
+        session_image_paths = []
         
-        # Store paths in session or a temporary file
-        with open('static/latest_plots.txt', 'w') as f:
-            f.write(f"{fixation_map_path}\n{pupil_heatmap_path}")
+        # Count the number of sessions based on percentage inputs
+        while f'session_percentage_{session_count + 1}' in request.form:
+            session_count += 1
+        
+        # Collect session percentages and image files
+        for i in range(1, session_count + 1):
+            percentage_key = f'session_percentage_{i}'
+            image_key = f'image_file_{i}'
+            
+            percentage = int(request.form.get(percentage_key, 0))
+            session_percentages.append(percentage)
+            
+            # Check if image file exists for this session
+            image_path = None
+            if image_key in request.files:
+                image_file = request.files[image_key]
+                if image_file.filename != '':
+                    # Save image file
+                    image_filepath = os.path.join(
+                        app.config['UPLOAD_FOLDER'], 
+                        f"{uuid.uuid4()}_{image_file.filename}"
+                    )
+                    image_file.save(image_filepath)
+                    image_path = image_filepath
+            
+            session_image_paths.append(image_path)
+        
+        # Verify total percentage is 100%
+        total_percentage = sum(session_percentages)
+        if total_percentage != 100:
+            return f"Session percentages must sum to 100%. Current sum: {total_percentage}%", 400
+        
+        # Read the CSV data
+        df = pd.read_csv(csv_filepath)
+        
+        # Split the dataframe based on percentages
+        session_dataframes = split_dataframe_by_percentages(df, session_percentages)
+        
+        # Process each session
+        session_results = []
+        
+        for i, session_df in enumerate(session_dataframes):
+            session_id = i + 1
+            session_percentage = session_percentages[i]
+            background_image = session_image_paths[i]
+            
+            # Generate visualizations for this session
+            fixation_map_path = create_fixation_map(
+                session_df, 
+                background_image,
+                distance_threshold=25
+            )
+            
+            pupil_heatmap_path = create_pupil_heatmap(
+                session_df, 
+                background_image
+            )
+            
+            # Collect session info
+            session_info = {
+                'id': session_id,
+                'percentage': session_percentage,
+                'data_count': len(session_df),
+                'fixation_map': fixation_map_path,
+                'pupil_heatmap': pupil_heatmap_path
+            }
+            
+            session_results.append(session_info)
+        
+        # Store session results for download page
+        with open('static/session_results.json', 'w') as f:
+            json.dump(session_results, f)
         
         # Clean up uploaded files
         os.remove(csv_filepath)
-        if background_image_path:
-            os.remove(background_image_path)
+        for image_path in session_image_paths:
+            if image_path and os.path.exists(image_path):
+                os.remove(image_path)
             
         # Clean old static files
         clean_old_files('static', age_seconds=3600)  # Clean files older than 1 hour
         
         return redirect(url_for('download_page'))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return f"Something went wrong: {str(e)}", 500
 
 
 @app.route('/download')
 def download_page():
-    # Read the latest plot paths from the file
+    # Read the session results from the JSON file
     try:
-        with open('static/latest_plots.txt', 'r') as f:
-            lines = f.readlines()
-            fixation_map_path = lines[0].strip()
-            pupil_heatmap_path = lines[1].strip()
+        with open('static/session_results.json', 'r') as f:
+            sessions = json.load(f)
     except:
-        # Fallback to default paths if file doesn't exist
-        fixation_map_path = 'static/fixation_map.png'
-        pupil_heatmap_path = 'static/pupil_size_heatmap.png'
+        # Fallback to empty sessions if file doesn't exist
+        sessions = []
     
-    return render_template('download.html', 
-                          fixation_map=fixation_map_path,
-                          pupil_heatmap=pupil_heatmap_path)
+    return render_template('download.html', sessions=sessions)
 
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
